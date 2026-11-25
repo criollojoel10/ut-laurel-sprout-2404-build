@@ -1,0 +1,63 @@
+name: build-ut-24.04-laurel_sprout
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    env:
+      ADAPTATION_TOOLS_BRANCH: main
+      ADAPTATION_TOOLS_USE_BUILD_WRAPPER: "1"
+      ADAPTATION_TOOLS_USE_TMP_BUILD_DIR: "1"
+      DEV_TARBALL_VARIANT: _usrmerge
+      ROOTFS_URL: https://ci.ubports.com/job/ubuntu-touch-rootfs/job/ubports%252F24.04-1.x/lastSuccessfulBuild/artifact/ubuntu-touch-android9plus-rootfs-arm64.tar.gz
+      OTA_CHANNEL: 24.04-1.x/arm64/android9plus/daily
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Liberar disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            android-tools-mkbootimg bc bison build-essential ca-certificates cpio \
+            curl e2fsprogs fakeroot flex git jq kmod libelf-dev libssl-dev libtinfo5 \
+            lz4 python2 python3 sudo unzip wget xz-utils zstd
+          sudo apt-get install -y --no-install-recommends img2simg || \
+            sudo apt-get install -y --no-install-recommends android-sdk-libsparse-utils
+          sudo ln -sf python2 /usr/bin/python
+          command -v mkbootimg img2simg mkfs.ext4 zstd
+
+      - name: Compilar kernel y device tarball
+        run: ./build.sh
+
+      - name: Generar imagen flasheable
+        run: |
+          set -x
+          DEVICE="$(source deviceinfo && echo $deviceinfo_codename)"
+          ./build/prepare-fake-ota.sh "out/device_${DEVICE}.tar.xz" ota
+          ./build/system-image-from-ota.sh ota/ubuntu_command out
+          mv out/rootfs.img out/ubuntu.img
+          zstd -T0 -19 -f out/ubuntu.img -o out/ubuntu.img.zst
+          rm -f out/ubuntu.img
+          ls -lh out
+
+      - name: Publicar artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: ut2404-laurel_sprout
+          path: |
+            out/*.img
+            out/*.zst
+          retention-days: 14
+          if-no-files-found: error
