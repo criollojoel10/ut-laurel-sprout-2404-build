@@ -38,6 +38,15 @@ jobs:
           sudo ln -sf python2 /usr/bin/python
           command -v mkbootimg img2simg mkfs.ext4 zstd
 
+      - name: Pre-descarga con aria2c
+        run: |
+          sudo apt-get install -y --no-install-recommends aria2
+          mkdir -p ota
+          aria2c -x16 -s16 -k1M -j2 --file-allocation=none --summary-interval=0 \
+            --console-log-level=warn --dir=ota \
+            "$ROOTFS_URL" \
+            "https://ci.ubports.com/job/UBportsCommunityPortsJenkinsCI/job/ubports%252Fporting%252Fcommunity-ports%252Fjenkins-ci%252Fgeneric_arm64/job/halium-11.0/lastSuccessfulBuild/artifact/halium_halium_arm64.tar.xz"
+
       - name: Compilar kernel y device tarball
         run: ./build.sh
 
